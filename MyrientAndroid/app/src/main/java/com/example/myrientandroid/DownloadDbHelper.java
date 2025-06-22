@@ -183,7 +183,7 @@ public class DownloadDbHelper extends SQLiteOpenHelper {
         item.setTotalBytes(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TOTAL_BYTES)));
         item.setDownloadSpeed(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DOWNLOAD_SPEED)));
         item.setFailureReason(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_FAILURE_REASON)));
-        // Created_at is mainly for sorting, not directly part of DownloadProgressInfo model for now.
+        item.setCreatedAt(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_CREATED_AT)));
         return item;
     }
 }

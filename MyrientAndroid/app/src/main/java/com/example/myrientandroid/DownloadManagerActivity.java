@@ -3,13 +3,15 @@ package com.example.myrientandroid;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.core.content.ContextCompat; // Adicionado
 
-import android.app.DownloadManager;
-import android.content.Context;
-import android.database.Cursor;
+// import android.app.DownloadManager; // Removido
+import android.content.Context; // Mantido para getSystemService em DownloadService (embora não usado aqui agora)
+import android.content.Intent; // Adicionado/Confirmado
+// import android.database.Cursor; // Removido
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
+// import android.os.Handler; // Removido
+// import android.os.Looper; // Removido
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
@@ -17,20 +19,23 @@ import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
+// import java.util.Comparator; // Comparator está implícito na lambda de sort
 import java.util.List;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+
 
 public class DownloadManagerActivity extends AppCompatActivity {
 
     private static final String TAG = "DownloadManagerAct";
     private RecyclerView recyclerViewDownloads;
     private DownloadsAdapter downloadsAdapter;
-    private List<DownloadItem> downloadItems = new ArrayList<>();
+    private List<DownloadProgressInfo> downloadItemsList = new ArrayList<>();
     private TextView textViewNoDownloads;
-    private DownloadManager systemDownloadManager;
-    private Handler handler;
-    private Runnable updateRunnable;
-    private static final long UPDATE_INTERVAL = 2000; // 2 segundos
+    private DownloadDbHelper dbHelper;
+    private DownloadUpdateReceiver downloadUpdateReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,126 +43,133 @@ public class DownloadManagerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_download_manager);
 
         if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Gerenciador de Downloads");
+            getSupportActionBar().setTitle("Meus Downloads"); // Título atualizado
         }
+
+        dbHelper = new DownloadDbHelper(this);
 
         recyclerViewDownloads = findViewById(R.id.recyclerViewDownloads);
         textViewNoDownloads = findViewById(R.id.textViewNoDownloads);
         recyclerViewDownloads.setLayoutManager(new LinearLayoutManager(this));
 
-        downloadsAdapter = new DownloadsAdapter(downloadItems, downloadId -> {
-            // Lógica de cancelamento
-            cancelDownload(downloadId);
+        downloadsAdapter = new DownloadsAdapter(downloadItemsList, downloadId -> {
+            // Lógica de cancelamento será chamada aqui, que envia Intent para o serviço
+            cancelDownloadAction(downloadId);
         });
         recyclerViewDownloads.setAdapter(downloadsAdapter);
 
-        systemDownloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-        handler = new Handler(Looper.getMainLooper());
-
-        setupUpdateRunnable();
-    }
-
-    private void setupUpdateRunnable() {
-        updateRunnable = new Runnable() {
-            @Override
-            public void run() {
-                loadDownloads();
-                handler.postDelayed(this, UPDATE_INTERVAL);
-            }
-        };
+        downloadUpdateReceiver = new DownloadUpdateReceiver();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        handler.post(updateRunnable); // Inicia a atualização
+        loadInitialDownloads(); // Carrega a lista inicial do DB
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(DownloadService.BROADCAST_DOWNLOAD_PROGRESS);
+        filter.addAction(DownloadService.BROADCAST_DOWNLOAD_STATE_CHANGED);
+        LocalBroadcastManager.getInstance(this).registerReceiver(downloadUpdateReceiver, filter);
+        Log.d(TAG, "BroadcastReceiver registrado.");
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        handler.removeCallbacks(updateRunnable); // Para a atualização
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(downloadUpdateReceiver);
+        Log.d(TAG, "BroadcastReceiver desregistrado.");
     }
 
-    private void loadDownloads() {
-        Log.d(TAG, "Carregando downloads...");
+    private void loadInitialDownloads() {
+        Log.d(TAG, "Carregando downloads iniciais do DB...");
+        // Executar em uma thread para não bloquear a UI, embora a leitura do DB possa ser rápida para poucos itens
         new Thread(() -> {
-            List<DownloadItem> currentDownloads = new ArrayList<>();
-            DownloadManager.Query query = new DownloadManager.Query();
-            //  query.setFilterByStatus(~(DownloadManager.STATUS_FAILED | DownloadManager.STATUS_SUCCESSFUL)); // Exemplo: apenas ativos/pendentes
-            // Para mostrar todos os downloads feitos pelo app:
-            // Não há um filtro direto para "apenas deste app" no query,
-            // então teremos que buscar todos e potencialmente filtrar ou apenas exibir.
-            // O DownloadManager geralmente só retorna downloads iniciados pelo UID do app.
-
-            Cursor cursor = null;
-            try {
-                cursor = systemDownloadManager.query(query);
-                if (cursor != null && cursor.moveToFirst()) {
-                    int idColumn = cursor.getColumnIndex(DownloadManager.COLUMN_ID);
-                    int titleColumn = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE);
-                    int statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
-                    int reasonColumn = cursor.getColumnIndex(DownloadManager.COLUMN_REASON);
-                    int totalBytesColumn = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES);
-                    int downloadedBytesColumn = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR);
-                    int uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_URI);
-                    int localUriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-                    int lastModifiedColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LAST_MODIFIED_TIMESTAMP);
-
-                    do {
-                        long id = cursor.getLong(idColumn);
-                        String title = cursor.getString(titleColumn);
-                        int status = cursor.getInt(statusColumn);
-                        int reason = cursor.getInt(reasonColumn);
-                        long totalBytes = cursor.getLong(totalBytesColumn);
-                        long downloadedBytes = cursor.getLong(downloadedBytesColumn);
-                        String uri = cursor.getString(uriColumn);
-                        String localUri = cursor.getString(localUriColumn);
-                        long lastModified = cursor.getLong(lastModifiedColumn);
-
-                        currentDownloads.add(new DownloadItem(id, title, status, reason, totalBytes, downloadedBytes, uri, localUri, lastModified));
-                    } while (cursor.moveToNext());
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Erro ao consultar downloads", e);
-            } finally {
-                if (cursor != null) {
-                    cursor.close();
-                }
-            }
-
-            // Ordenar por mais recente
-            Collections.sort(currentDownloads, (o1, o2) -> Long.compare(o2.getLastModifiedTimestamp(), o1.getLastModifiedTimestamp()));
-
+            List<DownloadProgressInfo> itemsFromDb = dbHelper.getAllDownloadsSortedByDate();
             runOnUiThread(() -> {
-                downloadItems.clear();
-                downloadItems.addAll(currentDownloads);
-                downloadsAdapter.notifyDataSetChanged();
+                downloadItemsList.clear();
+                downloadItemsList.addAll(itemsFromDb);
+                downloadsAdapter.notifyDataSetChanged(); // Ou usar adapter.updateList(itemsFromDb);
 
-                if (downloadItems.isEmpty()) {
+                if (downloadItemsList.isEmpty()) {
                     textViewNoDownloads.setVisibility(View.VISIBLE);
                     recyclerViewDownloads.setVisibility(View.GONE);
                 } else {
                     textViewNoDownloads.setVisibility(View.GONE);
                     recyclerViewDownloads.setVisibility(View.VISIBLE);
                 }
-                Log.d(TAG, "Downloads carregados: " + downloadItems.size());
+                Log.d(TAG, "Downloads iniciais carregados: " + downloadItemsList.size());
             });
         }).start();
     }
 
-    private void cancelDownload(long downloadId) {
-        if (systemDownloadManager != null) {
-            int count = systemDownloadManager.remove(downloadId);
-            if (count > 0) {
-                Toast.makeText(this, "Download cancelado.", Toast.LENGTH_SHORT).show();
-                // A lista será atualizada na próxima execução do updateRunnable
-                // Para feedback imediato, poderíamos remover o item da lista localmente e notificar o adapter,
-                // ou forçar uma atualização.
-                loadDownloads(); // Força atualização imediata
+    private void cancelDownloadAction(String downloadId) {
+        Log.d(TAG, "Solicitando cancelamento para o download ID: " + downloadId);
+        Intent intent = new Intent(this, DownloadService.class);
+        intent.setAction(DownloadService.ACTION_CANCEL_DOWNLOAD);
+        intent.putExtra(DownloadService.EXTRA_DOWNLOAD_ID, downloadId);
+        ContextCompat.startForegroundService(this, intent);
+        Toast.makeText(this, "Solicitação de cancelamento enviada...", Toast.LENGTH_SHORT).show();
+        // A UI será atualizada via BroadcastReceiver quando o serviço confirmar o cancelamento.
+        // Para feedback imediato, poderíamos mudar o estado localmente para "Cancelando..."
+        // e então o broadcast confirmaria ou reverteria.
+    }
+
+    // O BroadcastReceiver será adicionado no próximo passo do plano.
+
+    private class DownloadUpdateReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent == null || intent.getAction() == null) {
+                return;
+            }
+
+            DownloadProgressInfo receivedInfo = intent.getParcelableExtra(DownloadService.EXTRA_DOWNLOAD_INFO);
+            if (receivedInfo == null) {
+                Log.w(TAG, "Recebido broadcast sem DownloadProgressInfo.");
+                return;
+            }
+
+            Log.d(TAG, "Broadcast recebido: Ação=" + intent.getAction() + ", ID=" + receivedInfo.getId() + ", Status=" + receivedInfo.getStatus());
+
+            boolean listChanged = false;
+            int foundIndex = -1;
+            for (int i = 0; i < downloadItemsList.size(); i++) {
+                if (downloadItemsList.get(i).getId().equals(receivedInfo.getId())) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+
+            if (foundIndex != -1) {
+                // Atualiza item existente
+                downloadItemsList.set(foundIndex, receivedInfo);
+                listChanged = true;
             } else {
-                Toast.makeText(this, "Não foi possível cancelar o download.", Toast.LENGTH_SHORT).show();
-                Log.w(TAG, "Falha ao cancelar download ID: " + downloadId + ", contagem de remoção: " + count);
+                // Novo item (ex: PENDING de um novo download)
+                // Adiciona e reordena para garantir que PENDING apareça (a ordenação é por timestamp de criação)
+                downloadItemsList.add(receivedInfo);
+                listChanged = true; // Indica que a lista mudou e precisa ser reordenada/notificada
+            }
+
+            if (listChanged) {
+                if (foundIndex != -1) {
+                    // Item existente foi atualizado, notificar mudança específica
+                    downloadsAdapter.notifyItemChanged(foundIndex);
+                } else {
+                    // Novo item foi adicionado, reordenar e notificar dataset changed
+                    // A ordenação deve ser consistente com loadInitialDownloads
+                    Collections.sort(downloadItemsList, (o1, o2) -> Long.compare(o2.getCreatedAt(), o1.getCreatedAt()));
+                    downloadsAdapter.notifyDataSetChanged();
+                }
+            }
+
+            // Atualizar visibilidade do texto "Nenhum download"
+            if (downloadItemsList.isEmpty()) {
+                textViewNoDownloads.setVisibility(View.VISIBLE);
+                recyclerViewDownloads.setVisibility(View.GONE);
+            } else {
+                textViewNoDownloads.setVisibility(View.GONE);
+                recyclerViewDownloads.setVisibility(View.VISIBLE);
             }
         }
     }

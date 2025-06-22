@@ -9,19 +9,22 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
+import java.util.Locale; // Adicionado para formatação de velocidade
 
 public class DownloadsAdapter extends RecyclerView.Adapter<DownloadsAdapter.DownloadViewHolder> {
 
-    private List<DownloadItem> downloadList;
-    private OnDownloadCancelListener cancelListener;
+    private List<DownloadProgressInfo> downloadList; // Mudado para DownloadProgressInfo
+    private OnDownloadInteractionListener interactionListener; // Interface mais genérica
 
-    public interface OnDownloadCancelListener {
-        void onCancelClick(long downloadId);
+    public interface OnDownloadInteractionListener {
+        void onCancelClick(String downloadId); // ID é String agora
+        // void onPauseClick(String downloadId); // Para o futuro
+        // void onResumeClick(String downloadId); // Para o futuro
     }
 
-    public DownloadsAdapter(List<DownloadItem> downloadList, OnDownloadCancelListener cancelListener) {
+    public DownloadsAdapter(List<DownloadProgressInfo> downloadList, OnDownloadInteractionListener listener) {
         this.downloadList = downloadList;
-        this.cancelListener = cancelListener;
+        this.interactionListener = listener;
     }
 
     @NonNull
@@ -33,28 +36,45 @@ public class DownloadsAdapter extends RecyclerView.Adapter<DownloadsAdapter.Down
 
     @Override
     public void onBindViewHolder(@NonNull DownloadViewHolder holder, int position) {
-        DownloadItem item = downloadList.get(position);
+        DownloadProgressInfo item = downloadList.get(position);
 
         holder.fileNameTextView.setText(item.getFileName());
         holder.statusTextView.setText(item.getStatusText());
-        holder.progressTextView.setText(item.getProgressSizeText() + " (" + item.getProgressPercentage() + "%)");
+
+        String progressText = String.format(Locale.getDefault(), "%s (%d%%)",
+                                item.getProgressSizeText(), item.getProgressPercentage());
+        if (item.getStatus() == DownloadProgressInfo.DownloadStatus.DOWNLOADING && item.getDownloadSpeed() != null && !item.getDownloadSpeed().isEmpty()) {
+            progressText += " - " + item.getDownloadSpeed();
+        }
+        holder.progressTextView.setText(progressText);
         holder.downloadProgressBar.setProgress(item.getProgressPercentage());
 
+        // Visibilidade e ação do botão Cancelar
         if (item.isCancelable()) {
             holder.cancelButton.setVisibility(View.VISIBLE);
             holder.cancelButton.setOnClickListener(v -> {
-                if (cancelListener != null) {
-                    cancelListener.onCancelClick(item.getId());
+                if (interactionListener != null) {
+                    interactionListener.onCancelClick(item.getId());
                 }
             });
         } else {
             holder.cancelButton.setVisibility(View.GONE);
         }
+
+        // TODO: Adicionar lógica para botões Pausar/Continuar no futuro
+        // holder.pauseButton.setVisibility(item.isPausable() ? View.VISIBLE : View.GONE);
+        // holder.resumeButton.setVisibility(item.isResumable() ? View.VISIBLE : View.GONE);
     }
 
     @Override
     public int getItemCount() {
         return downloadList != null ? downloadList.size() : 0;
+    }
+
+    // Método para atualizar a lista (pode ser melhorado com DiffUtil no futuro)
+    public void updateList(List<DownloadProgressInfo> newList) {
+        this.downloadList = newList;
+        notifyDataSetChanged();
     }
 
     static class DownloadViewHolder extends RecyclerView.ViewHolder {
