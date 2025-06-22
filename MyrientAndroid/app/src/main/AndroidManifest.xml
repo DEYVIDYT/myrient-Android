@@ -23,6 +23,9 @@
             </intent-filter>
         </activity>
         <activity android:name=".GameListActivity" />
+        <activity
+            android:name=".DownloadManagerActivity"
+            android:label="Gerenciador de Downloads" />
     </application>
 
 </manifest>

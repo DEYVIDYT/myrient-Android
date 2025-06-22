@@ -14,4 +14,5 @@
     <color name="colorAccent">#FF03DAC5</color> <!-- = teal_200 -->
     <color name="colorControlNormal">#BDBDBD</color> <!-- Cinza para controles normais/inativos -->
     <color name="colorControlHighlight">#4003DAC5</color> <!-- teal_200 com alpha para ripple/highlight -->
+    <color name="colorError">#B00020</color> <!-- Cor padrão do Material para erros -->
 </resources>

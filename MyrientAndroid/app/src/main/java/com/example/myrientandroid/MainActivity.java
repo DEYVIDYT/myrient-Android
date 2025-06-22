@@ -10,7 +10,10 @@ import android.util.Log;
 import android.widget.Toast;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
+import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -84,5 +87,21 @@ public class MainActivity extends AppCompatActivity implements ConsoleAdapter.On
         intent.putExtra("CONSOLE_NAME", consoleItem.name);
         intent.putExtra("CONSOLE_URL", consoleItem.url);
         startActivity(intent);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_download_manager) {
+            Intent intent = new Intent(this, DownloadManagerActivity.class);
+            startActivity(intent);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 }
