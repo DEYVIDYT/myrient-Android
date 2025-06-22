@@ -506,35 +506,50 @@ public class DownloadService extends Service {
                 Log.e(TAG, "Exceção no download de " + downloadInfo.getFileName() + ": " + e.getMessage());
                 // Verificar o estado no DB para distinguir Pausa de Cancelamento/Falha
                 DownloadProgressInfo currentDbState = dbHelper.getDownload(downloadInfo.getId());
-                DownloadProgressInfo.DownloadStatus finalStatus = DownloadProgressInfo.DownloadStatus.FAILED; // Default
-                String reason = e.getMessage() != null ? e.getMessage() : "Erro desconhecido";
+                DownloadProgressInfo.DownloadStatus finalStatus;
+                String reason;
 
-                if (currentDbState != null && currentDbState.getStatus() == DownloadProgressInfo.DownloadStatus.PAUSED) {
+                // Recarrega o estado do DB para garantir que estamos vendo a intenção mais recente (PAUSED vs CANCELLED)
+                DownloadProgressInfo authoritativeStateFromDb = dbHelper.getDownload(downloadInfo.getId());
+
+                if (authoritativeStateFromDb != null && authoritativeStateFromDb.getStatus() == DownloadProgressInfo.DownloadStatus.PAUSED) {
                     finalStatus = DownloadProgressInfo.DownloadStatus.PAUSED;
-                    reason = "Pausado pelo usuário"; // Já definido por pauseDownloadInternal
-                    Log.i(TAG, "Download " + downloadInfo.getFileName() + " confirmado como PAUSADO após exceção (provavelmente call.cancel()).");
-                } else if (call != null && call.isCanceled()) { // Se a call foi cancelada e não era uma pausa
+                    reason = authoritativeStateFromDb.getFailureReason(); // "Pausado pelo usuário" setado por pauseDownloadInternal
+
+                    // Atualizar o objeto downloadInfo local com o progresso atual antes de salvar
+                    downloadInfo.setStatus(finalStatus);
+                    downloadInfo.setFailureReason(reason);
+                    // bytesDownloaded e progress já estão atualizados em downloadInfo pela sessão de download
+                    dbHelper.updateDownload(downloadInfo); // Salva o progresso exato no momento da pausa
+                    Log.i(TAG, "Download " + downloadInfo.getFileName() + " PAUSADO. Progresso salvo: " + downloadInfo.getBytesDownloaded() + " bytes.");
+
+                } else if (call != null && call.isCanceled()) { // Se a call foi cancelada e não era uma pausa (pode ser CANCELLED do DB)
                     finalStatus = DownloadProgressInfo.DownloadStatus.CANCELLED;
-                    reason = "Cancelado";
-                     Log.i(TAG, "Download " + downloadInfo.getFileName() + " confirmado como CANCELADO após exceção.");
+                    reason = (authoritativeStateFromDb != null && authoritativeStateFromDb.getFailureReason() != null) ? authoritativeStateFromDb.getFailureReason() : "Cancelado";
+
+                    downloadInfo.setStatus(finalStatus);
+                    downloadInfo.setFailureReason(reason);
+                    dbHelper.updateDownload(downloadInfo); // Salva o estado de cancelamento
+                    Log.i(TAG, "Download " + downloadInfo.getFileName() + " CANCELADO.");
                     deletePartialFile(downloadInfo.getLocalFilePath());
-                } else {
-                     Log.w(TAG, "Download " + downloadInfo.getFileName() + " FALHOU. Razão: " + reason);
-                    // Considerar deletar arquivo parcial em caso de falha também, dependendo da política.
-                    // deletePartialFile(downloadInfo.getLocalFilePath());
+                } else { // Falha genuína
+                    finalStatus = DownloadProgressInfo.DownloadStatus.FAILED;
+                    reason = e.getMessage() != null ? e.getMessage() : "Erro desconhecido de IO";
+
+                    downloadInfo.setStatus(finalStatus);
+                    downloadInfo.setFailureReason(reason);
+                    dbHelper.updateDownload(downloadInfo); // Salva o estado de falha
+                    Log.w(TAG, "Download " + downloadInfo.getFileName() + " FALHOU. Razão: " + reason);
+                    // Opcional: deletePartialFile(downloadInfo.getLocalFilePath());
                 }
 
-                downloadInfo.setStatus(finalStatus);
-                downloadInfo.setFailureReason(reason);
-                dbHelper.updateDownloadStatus(downloadInfo.getId(), finalStatus, reason);
-                sendBroadcastStateChanged(downloadInfo);
+                sendBroadcastStateChanged(downloadInfo); // Envia o estado final (com progresso atualizado se pausado)
 
-                if (finalStatus == DownloadProgressInfo.DownloadStatus.PAUSED) {
-                    // A notificação de pausa já foi (ou será) tratada por pauseDownloadInternal
-                    // updateIndividualNotificationAsPaused(downloadInfo); // Redundante se pauseDownloadInternal já fez
-                } else {
+                // Notificações são tratadas por pauseDownloadInternal ou aqui para falha/cancelamento
+                if (finalStatus == DownloadProgressInfo.DownloadStatus.FAILED || finalStatus == DownloadProgressInfo.DownloadStatus.CANCELLED) {
                     updateIndividualNotificationAsFailedOrCancelled(downloadInfo);
                 }
+                // Se PAUSED, pauseDownloadInternal já cuidou da notificação de pausa.
 
             } finally {
                 try {
