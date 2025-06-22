@@ -7,4 +7,11 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Cores exigidas pelo styles.xml do Sketchware -->
+    <color name="colorPrimary">#FF6200EE</color> <!-- = purple_500 -->
+    <color name="colorPrimaryDark">#FF3700B3</color> <!-- = purple_700 -->
+    <color name="colorAccent">#FF03DAC5</color> <!-- = teal_200 -->
+    <color name="colorControlNormal">#BDBDBD</color> <!-- Cinza para controles normais/inativos -->
+    <color name="colorControlHighlight">#4003DAC5</color> <!-- teal_200 com alpha para ripple/highlight -->
 </resources>
