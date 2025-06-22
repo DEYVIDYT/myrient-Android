@@ -5,9 +5,11 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context; // Adicionado
 import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
+import java.util.List; // Adicionado
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
@@ -101,7 +103,7 @@ public class DownloadService extends Service {
     }
 
     private void updateForegroundServiceNotification() {
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
         int currentActiveDownloads = 0;
         // Query DB or count active tasks to get the number of truly active downloads
         List<DownloadProgressInfo> allItems = dbHelper.getAllDownloadsSortedByDate();
@@ -377,7 +379,7 @@ public class DownloadService extends Service {
     }
 
     private void updateIndividualNotification(DownloadProgressInfo info) {
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
         int notificationId = info.getId().hashCode(); // Unique ID for this download's notification
 
         Intent cancelIntent = new Intent(this, DownloadService.class);
@@ -399,7 +401,7 @@ public class DownloadService extends Service {
     }
 
     private void updateIndividualNotificationAsFailedOrCancelled(DownloadProgressInfo info) {
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
         int notificationId = info.getId().hashCode();
 
         String statusText = info.getStatus() == DownloadProgressInfo.DownloadStatus.CANCELLED ? "Cancelado" : "Falhou";
@@ -420,7 +422,7 @@ public class DownloadService extends Service {
 
 
     private void removeIndividualNotification(int notificationId) {
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
         notificationManager.cancel(notificationId);
     }
 
