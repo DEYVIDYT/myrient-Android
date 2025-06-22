@@ -8,6 +8,9 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Toast;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.view.View;
 
 import java.util.ArrayList;
 import java.util.List;
