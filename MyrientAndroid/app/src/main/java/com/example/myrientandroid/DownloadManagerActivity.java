@@ -52,9 +52,23 @@ public class DownloadManagerActivity extends AppCompatActivity {
         textViewNoDownloads = findViewById(R.id.textViewNoDownloads);
         recyclerViewDownloads.setLayoutManager(new LinearLayoutManager(this));
 
-        downloadsAdapter = new DownloadsAdapter(downloadItemsList, downloadId -> {
-            // Lógica de cancelamento será chamada aqui, que envia Intent para o serviço
-            cancelDownloadAction(downloadId);
+        downloadsAdapter = new DownloadsAdapter(downloadItemsList, new DownloadsAdapter.OnDownloadInteractionListener() {
+            @Override
+            public void onCancelClick(String downloadId) {
+                cancelDownloadAction(downloadId);
+            }
+
+            @Override
+            public void onPauseClick(String downloadId) {
+                Toast.makeText(DownloadManagerActivity.this, "Pausar ID: " + downloadId + " (não implementado)", Toast.LENGTH_SHORT).show();
+                // Futuramente: Enviar Intent para DownloadService.ACTION_PAUSE_DOWNLOAD
+            }
+
+            @Override
+            public void onResumeClick(String downloadId) {
+                Toast.makeText(DownloadManagerActivity.this, "Continuar ID: " + downloadId + " (não implementado)", Toast.LENGTH_SHORT).show();
+                // Futuramente: Enviar Intent para DownloadService.ACTION_RESUME_DOWNLOAD
+            }
         });
         recyclerViewDownloads.setAdapter(downloadsAdapter);
 

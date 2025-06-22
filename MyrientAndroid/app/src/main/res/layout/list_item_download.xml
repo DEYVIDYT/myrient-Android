@@ -72,8 +72,6 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@id/textViewDownloadProgress" />
 
-        <!-- Placeholder para botões de Pausa/Continuar -->
-        <!--
         <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonPauseDownload"
             style="?attr/materialButtonOutlinedStyle"
@@ -84,7 +82,9 @@
             android:layout_marginEnd="8dp"
             app:layout_constraintEnd_toStartOf="@+id/buttonCancelDownload"
             app:layout_constraintTop_toTopOf="@id/buttonCancelDownload"
-            android:visibility="gone"/>
+            app:layout_constraintBottom_toBottomOf="@id/buttonCancelDownload"
+            android:visibility="gone"
+            tools:visibility="visible"/>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonResumeDownload"
@@ -96,8 +96,9 @@
             android:layout_marginEnd="8dp"
             app:layout_constraintEnd_toStartOf="@+id/buttonCancelDownload"
             app:layout_constraintTop_toTopOf="@id/buttonCancelDownload"
-            android:visibility="gone"/>
-        -->
+            app:layout_constraintBottom_toBottomOf="@id/buttonCancelDownload"
+            android:visibility="gone"
+            tools:visibility="visible"/>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>

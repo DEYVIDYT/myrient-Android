@@ -18,8 +18,8 @@ public class DownloadsAdapter extends RecyclerView.Adapter<DownloadsAdapter.Down
 
     public interface OnDownloadInteractionListener {
         void onCancelClick(String downloadId); // ID é String agora
-        // void onPauseClick(String downloadId); // Para o futuro
-        // void onResumeClick(String downloadId); // Para o futuro
+        void onPauseClick(String downloadId); // Adicionado para o futuro
+        void onResumeClick(String downloadId); // Adicionado para o futuro
     }
 
     public DownloadsAdapter(List<DownloadProgressInfo> downloadList, OnDownloadInteractionListener listener) {
@@ -61,9 +61,29 @@ public class DownloadsAdapter extends RecyclerView.Adapter<DownloadsAdapter.Down
             holder.cancelButton.setVisibility(View.GONE);
         }
 
-        // TODO: Adicionar lógica para botões Pausar/Continuar no futuro
-        // holder.pauseButton.setVisibility(item.isPausable() ? View.VISIBLE : View.GONE);
-        // holder.resumeButton.setVisibility(item.isResumable() ? View.VISIBLE : View.GONE);
+        // Lógica de visibilidade para botões Pausar/Continuar
+        holder.pauseButton.setVisibility(item.isPausable() ? View.VISIBLE : View.GONE);
+        holder.resumeButton.setVisibility(item.isResumable() ? View.VISIBLE : View.GONE);
+
+        // Se o item não puder ser cancelado, mas puder ser pausado ou resumido,
+        // o botão de cancelar pode estar escondido, então os outros botões não devem depender do seu alinhamento
+        // se o cancelar estiver GONE. No layout atual, eles estão encadeados ao Cancelar.
+        // Uma melhoria seria usar um LinearLayout horizontal para os botões ou ajustar constraints.
+        // Por agora, a visibilidade individual é o foco.
+
+        holder.pauseButton.setOnClickListener(v -> {
+            if (interactionListener != null) {
+                interactionListener.onPauseClick(item.getId());
+            }
+            // Toast.makeText(holder.itemView.getContext(), "Pausar: " + item.getFileName(), Toast.LENGTH_SHORT).show();
+        });
+
+        holder.resumeButton.setOnClickListener(v -> {
+            if (interactionListener != null) {
+                interactionListener.onResumeClick(item.getId());
+            }
+            // Toast.makeText(holder.itemView.getContext(), "Continuar: " + item.getFileName(), Toast.LENGTH_SHORT).show();
+        });
     }
 
     @Override
@@ -83,6 +103,8 @@ public class DownloadsAdapter extends RecyclerView.Adapter<DownloadsAdapter.Down
         ProgressBar downloadProgressBar;
         TextView progressTextView;
         Button cancelButton;
+        Button pauseButton; // Adicionado
+        Button resumeButton; // Adicionado
 
         public DownloadViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -91,6 +113,8 @@ public class DownloadsAdapter extends RecyclerView.Adapter<DownloadsAdapter.Down
             downloadProgressBar = itemView.findViewById(R.id.progressBarDownload);
             progressTextView = itemView.findViewById(R.id.textViewDownloadProgress);
             cancelButton = itemView.findViewById(R.id.buttonCancelDownload);
+            pauseButton = itemView.findViewById(R.id.buttonPauseDownload); // Adicionado
+            resumeButton = itemView.findViewById(R.id.buttonResumeDownload); // Adicionado
         }
     }
 }
