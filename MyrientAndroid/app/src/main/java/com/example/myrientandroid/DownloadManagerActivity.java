@@ -60,14 +60,22 @@ public class DownloadManagerActivity extends AppCompatActivity {
 
             @Override
             public void onPauseClick(String downloadId) {
-                Toast.makeText(DownloadManagerActivity.this, "Pausar ID: " + downloadId + " (não implementado)", Toast.LENGTH_SHORT).show();
-                // Futuramente: Enviar Intent para DownloadService.ACTION_PAUSE_DOWNLOAD
+                Log.d(TAG, "UI: Solicitação de PAUSA para ID: " + downloadId);
+                Intent intent = new Intent(DownloadManagerActivity.this, DownloadService.class);
+                intent.setAction(DownloadService.ACTION_PAUSE_DOWNLOAD);
+                intent.putExtra(DownloadService.EXTRA_DOWNLOAD_ID, downloadId);
+                ContextCompat.startForegroundService(DownloadManagerActivity.this, intent);
+                // Opcional: Mudar estado na UI para "Pausando..." imediatamente
             }
 
             @Override
             public void onResumeClick(String downloadId) {
-                Toast.makeText(DownloadManagerActivity.this, "Continuar ID: " + downloadId + " (não implementado)", Toast.LENGTH_SHORT).show();
-                // Futuramente: Enviar Intent para DownloadService.ACTION_RESUME_DOWNLOAD
+                Log.d(TAG, "UI: Solicitação de CONTINUAR para ID: " + downloadId);
+                Intent intent = new Intent(DownloadManagerActivity.this, DownloadService.class);
+                intent.setAction(DownloadService.ACTION_RESUME_DOWNLOAD);
+                intent.putExtra(DownloadService.EXTRA_DOWNLOAD_ID, downloadId);
+                ContextCompat.startForegroundService(DownloadManagerActivity.this, intent);
+                // Opcional: Mudar estado na UI para "Continuando..."/"Pendente..."
             }
         });
         recyclerViewDownloads.setAdapter(downloadsAdapter);
