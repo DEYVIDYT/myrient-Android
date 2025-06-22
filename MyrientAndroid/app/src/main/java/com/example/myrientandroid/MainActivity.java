@@ -14,6 +14,13 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,10 +35,32 @@ public class MainActivity extends AppCompatActivity implements ConsoleAdapter.On
     private ProgressBar progressBarMain;
     private TextView textViewMainInfo;
 
+    // ActivityResultLauncher for permission request
+    private ActivityResultLauncher<String> requestPermissionLauncher;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Initialize the ActivityResultLauncher
+        requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            if (isGranted) {
+                // Permission is granted. Continue the action or workflow in your app.
+                Log.d(TAG, "POST_NOTIFICATIONS permission granted.");
+                Toast.makeText(this, "Permissão de notificação concedida.", Toast.LENGTH_SHORT).show();
+            } else {
+                // Explain to the user that the feature is unavailable because the
+                // features requires a permission that the user has denied. At the
+                // same time, respect the user's decision. Don't link to system
+                // settings in an effort to convince the user to change their
+                // decision.
+                Log.d(TAG, "POST_NOTIFICATIONS permission denied.");
+                Toast.makeText(this, "Permissão de notificação negada. Algumas funcionalidades podem ser limitadas.", Toast.LENGTH_LONG).show();
+            }
+        });
+
+        askNotificationPermission();
 
         recyclerViewConsoles = findViewById(R.id.recyclerViewConsoles);
         progressBarMain = findViewById(R.id.progressBarMain);
@@ -44,6 +73,27 @@ public class MainActivity extends AppCompatActivity implements ConsoleAdapter.On
         myrientScraper = new MyrientScraper();
         fetchConsolesData();
     }
+
+    private void askNotificationPermission() {
+        // This is only necessary for API level 33 and higher (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED) {
+                // FCM SDK (and your app) can post notifications.
+                Log.d(TAG, "POST_NOTIFICATIONS permission already granted.");
+            } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                // TODO: Display an educational UI explaining to the user the importance of the permission.
+                // For now, just request directly or show a toast.
+                Toast.makeText(this, "Por favor, conceda a permissão de notificação para receber atualizações de download.", Toast.LENGTH_LONG).show();
+                // Then, request the permission
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            } else {
+                // Directly ask for the permission
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            }
+        }
+    }
+
 
     private void fetchConsolesData() {
         progressBarMain.setVisibility(View.VISIBLE);
