@@ -33,10 +33,10 @@
 
         <service
             android:name=".DownloadService"
-            android:exported="false" />
-            <!-- android:foregroundServiceType="dataSync" or "specialUse" if applicable, but not strictly needed for basic foreground -->
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
             <!-- For Android 14+ if targeting API 34, foregroundServiceType is mandatory if service starts foreground -->
-            <!-- For now, let's assume targetSdk < 34 or we'll add type later if needed by specific functionality like dataSync -->
+            <!-- dataSync is appropriate for user-initiated downloads -->
 
     </application>
 
