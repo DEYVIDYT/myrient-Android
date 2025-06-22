@@ -4,9 +4,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import android.app.DownloadManager;
+import android.app.DownloadManager; // Não mais usado diretamente aqui, mas pode ficar
 import android.content.Context;
+import android.content.Intent; // Adicionado para garantir
 import android.net.Uri;
+import androidx.core.content.ContextCompat; // Adicionado
 import android.os.Bundle;
 import android.os.Environment;
 import android.widget.ProgressBar;
@@ -157,6 +159,8 @@ public class GameListActivity extends AppCompatActivity implements GameAdapter.O
         // Optionally: Set MIME type if known, though often inferred
         // request.setMimeType("application/octet-stream"); // Generic binary file
 
+        // --- ANTIGA LÓGICA COM DownloadManager DO SISTEMA ---
+        /*
         DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
         if (downloadManager != null) {
             try {
@@ -171,5 +175,17 @@ public class GameListActivity extends AppCompatActivity implements GameAdapter.O
             Log.e(TAG, "DownloadManager service not available.");
             Toast.makeText(this, "Download service not available.", Toast.LENGTH_LONG).show();
         }
+        */
+
+        // --- NOVA LÓGICA PARA INICIAR DownloadService ---
+        Intent intent = new Intent(this, DownloadService.class);
+        intent.setAction(DownloadService.ACTION_START_DOWNLOAD);
+        intent.putExtra(DownloadService.EXTRA_URL, gameItem.downloadUrl);
+        intent.putExtra(DownloadService.EXTRA_FILE_NAME, fileName); // Usando o 'fileName' que já foi determinado
+
+        ContextCompat.startForegroundService(this, intent);
+        Toast.makeText(this, "Download de " + fileName + " adicionado à fila.", Toast.LENGTH_LONG).show();
+        Log.d(TAG, "Solicitação de download enviada ao DownloadService para: " + fileName + " URL: " + gameItem.downloadUrl);
+
     }
 }
