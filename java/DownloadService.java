@@ -513,15 +513,20 @@ public class DownloadService extends Service {
                 }
 
                 long totalBytesReportedByServer = body.contentLength();
-                long initialBytesDownloaded = downloadInfo.getBytesDownloaded(); // Captura antes de qualquer possível reset
+                long actualInitialBytesDownloaded = downloadInfo.getBytesDownloaded(); // Progresso salvo ANTES de qualquer decisão
+                long bytesParaCalculoDeProgresso = actualInitialBytesDownloaded; // Valor que será usado no loop de download. Assume retomada por padrão.
                 long totalBytesForProgress;
+
                 boolean serverRespondedWith206 = response.code() == 206;
+                // openInAppendMode define se o ARQUIVO físico será anexado ou sobrescrito.
+                boolean openInAppendMode = isResuming && serverRespondedWith206;
 
                 // --- Setup Output Stream (SAF or traditional) ---
                 if (useSaf) {
-                    String openMode = (isResuming && serverRespondedWith206) ? "wa" : "w";
+                    String openMode = openInAppendMode ? "wa" : "w";
                     Log.d(TAG, "SAF: Abrindo OutputStream para '" + downloadInfo.getFileName() + "' com mode: " + openMode +
                                ". isResuming: " + isResuming + ", serverRespondedWith206: " + serverRespondedWith206 +
+                               ", appendModeSeraUsado: " + openInAppendMode +
                                ". Current file length (DocFile): " + (targetFileDocFile != null ? targetFileDocFile.length() : "N/A"));
                     try {
                         outputStream = getContentResolver().openOutputStream(targetFileDocFile.getUri(), openMode);
@@ -533,19 +538,20 @@ public class DownloadService extends Service {
                     }
                 } else {
                     File actualTargetFile = new File(downloadInfo.getLocalFilePath());
-                    boolean appendMode = isResuming && serverRespondedWith206;
-                    Log.d(TAG, "FileIO: Abrindo OutputStream para '" + downloadInfo.getFileName() + "' com appendMode: " + appendMode +
+                    Log.d(TAG, "FileIO: Abrindo OutputStream para '" + downloadInfo.getFileName() + "' com appendMode: " + openInAppendMode +
                                ". isResuming: " + isResuming + ", serverRespondedWith206: " + serverRespondedWith206 +
                                ". Current file length: " + actualTargetFile.length());
-                    outputStream = new FileOutputStream(actualTargetFile, appendMode);
+                    outputStream = new FileOutputStream(actualTargetFile, openInAppendMode);
                 }
 
-
+                // Lógica de decisão para o progresso (UI e cálculos internos)
                 if (isResuming) {
-                    if (serverRespondedWith206) { // HTTP_PARTIAL_CONTENT
-                        Log.i(TAG, "Servidor suportou retomada (206) para " + downloadInfo.getFileName() +
-                                   ". initialBytesDownloaded: " + initialBytesDownloaded +
-                                   ", downloadInfo.getBytesDownloaded(): " + downloadInfo.getBytesDownloaded());
+                    if (serverRespondedWith206) {
+                        // Caso de retomada bem-sucedida. OutputStream está em modo append.
+                        // bytesParaCalculoDeProgresso já é actualInitialBytesDownloaded.
+                        // downloadInfo.getBytesDownloaded() NÃO é alterado aqui, então mantém o progresso salvo para o broadcast inicial.
+                        Log.i(TAG, "RETOMADA 206: Usando progresso salvo. actualInitialBytesDownloaded=" + actualInitialBytesDownloaded +
+                                   ", downloadInfo.getBytesDownloaded() antes do loop=" + downloadInfo.getBytesDownloaded());
 
                         String contentRange = response.header("Content-Range");
                         if (contentRange != null) {
@@ -556,7 +562,7 @@ public class DownloadService extends Service {
                                     String[] rangeAndTotal = parts[1].split("/");
                                     if (rangeAndTotal.length > 1) {
                                         long serverTotal = Long.parseLong(rangeAndTotal[1]);
-                                        downloadInfo.setTotalBytes(serverTotal);
+                                        downloadInfo.setTotalBytes(serverTotal); // Atualiza o total no objeto info
                                         Log.d(TAG, "Total de bytes do servidor (Content-Range): " + serverTotal);
                                     }
                                 }
@@ -564,23 +570,19 @@ public class DownloadService extends Service {
                         }
 
                         if (downloadInfo.getTotalBytes() <= 0 && totalBytesReportedByServer > 0) {
-                            downloadInfo.setTotalBytes(initialBytesDownloaded + totalBytesReportedByServer);
-                            Log.d(TAG, "Total de bytes calculado (initial + reported): " + downloadInfo.getTotalBytes());
+                            downloadInfo.setTotalBytes(actualInitialBytesDownloaded + totalBytesReportedByServer);
+                            Log.d(TAG, "Total de bytes calculado (actualInitial + reported): " + downloadInfo.getTotalBytes());
                         }
                         totalBytesForProgress = downloadInfo.getTotalBytes();
+                        // bytesParaCalculoDeProgresso já está como actualInitialBytesDownloaded.
+                        // downloadInfo.getBytesDownloaded() ainda é actualInitialBytesDownloaded.
 
-                        Log.i(TAG, "RETOMADA 206: Pronto para iniciar loop. initialBytesDownloaded=" + initialBytesDownloaded +
-                                   ", downloadInfo.getBytesDownloaded()=" + downloadInfo.getBytesDownloaded() +
-                                   ", totalBytesForProgress=" + totalBytesForProgress);
-
-                    } else { // Server did not support range, or returned 200 OK
-                        Log.w(TAG, "Servidor não suportou retomada (código " + response.code() + ") para " + downloadInfo.getFileName() + ". Reiniciando download.");
-                        initialBytesDownloaded = 0;
-                        downloadInfo.setBytesDownloaded(0);
-
-                        // O outputStream já foi aberto em modo de sobrescrita porque serverRespondedWith206 é false.
-                        // Não é necessário fechar e reabrir aqui, a menos que a lógica de abertura inicial mude.
-                        // A lógica original de reabertura foi removida para simplificar, pois a decisão já foi tomada.
+                    } else {
+                        // Retomada falhou (servidor não respondeu 206). OutputStream está em modo overwrite.
+                        // UI deve mostrar 0KB. Loop de download deve começar a contar do zero.
+                        Log.w(TAG, "NÃO-RETOMADA (isResuming=true, mas code!=206): Reiniciando. Progresso zerado. Código HTTP: " + response.code());
+                        bytesParaCalculoDeProgresso = 0;
+                        downloadInfo.setBytesDownloaded(0); // Afeta UI/Broadcast inicial
 
                         if (totalBytesReportedByServer > 0) {
                             downloadInfo.setTotalBytes(totalBytesReportedByServer);
@@ -588,26 +590,30 @@ public class DownloadService extends Service {
                             downloadInfo.setTotalBytes(-1);
                         }
                         totalBytesForProgress = downloadInfo.getTotalBytes();
-                        Log.i(TAG, "NÃO-RETOMADA: Pronto para iniciar loop. initialBytesDownloaded=" + initialBytesDownloaded +
-                            ", downloadInfo.getBytesDownloaded()=" + downloadInfo.getBytesDownloaded() +
-                            ", totalBytesForProgress=" + totalBytesForProgress);
                     }
-                } else { // Novo download
-                    if (!response.isSuccessful()) { // Só checar para novo download; retomada falha tratada acima
+                } else {
+                    // Novo download. OutputStream em modo overwrite.
+                    Log.i(TAG, "NOVO DOWNLOAD: Progresso zerado.");
+                    bytesParaCalculoDeProgresso = 0;
+                    downloadInfo.setBytesDownloaded(0); // Afeta UI/Broadcast inicial
+
+                    if (!response.isSuccessful()) {
                         throw new IOException("Falha no download (novo): " + response.code() + " - " + response.message());
                     }
-                    initialBytesDownloaded = 0;
-                    downloadInfo.setBytesDownloaded(0);
                     if (totalBytesReportedByServer > 0) {
                         downloadInfo.setTotalBytes(totalBytesReportedByServer);
                     } else {
                         downloadInfo.setTotalBytes(-1);
                     }
                     totalBytesForProgress = downloadInfo.getTotalBytes();
-                    Log.i(TAG, "NOVO DOWNLOAD: Pronto para iniciar loop. initialBytesDownloaded=" + initialBytesDownloaded +
-                        ", downloadInfo.getBytesDownloaded()=" + downloadInfo.getBytesDownloaded() +
-                        ", totalBytesForProgress=" + totalBytesForProgress);
                 }
+
+                Log.i(TAG, "ANTES DO BROADCAST INICIAL E LOOP: " +
+                           "isResuming=" + isResuming + ", serverRespondedWith206=" + serverRespondedWith206 +
+                           ", openInAppendMode=" + openInAppendMode +
+                           ", downloadInfo.getBytesDownloaded()=" + downloadInfo.getBytesDownloaded() +
+                           ", bytesParaCalculoDeProgresso=" + bytesParaCalculoDeProgresso +
+                           ", totalBytesForProgress=" + totalBytesForProgress);
 
                 // Atualiza DB com o tamanho total se foi descoberto/confirmado
                 if (downloadInfo.getTotalBytes() > 0) {
