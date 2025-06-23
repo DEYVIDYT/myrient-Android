@@ -649,7 +649,7 @@ public class DownloadService extends Service {
 
                     outputStream.write(data, 0, bytesRead);
                     currentBytesDownloadedThisSession += bytesRead;
-                    long totalOverallBytesDownloaded = initialBytesDownloaded + currentBytesDownloadedThisSession;
+                    long totalOverallBytesDownloaded = bytesParaCalculoDeProgresso + currentBytesDownloadedThisSession;
                     downloadInfo.setBytesDownloaded(totalOverallBytesDownloaded);
 
                     long currentTime = System.currentTimeMillis();
