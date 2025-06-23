@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="12dp"
+    android:layout_marginVertical="6dp"
+    app:cardElevation="2dp"
+    app:cardCornerRadius="16dp"
+    app:cardBackgroundColor="?attr/colorSurface"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:strokeWidth="1dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="20dp">
+
+        <!-- File icon and status indicator -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardFileIcon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="?attr/colorTertiaryContainer"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:id="@+id/imageViewFileIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@android:drawable/stat_sys_download"
+                android:tint="?attr/colorOnTertiaryContainer"
+                tools:ignore="UseAppTint" />
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Status indicator badge -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardStatusBadge"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/status_downloading"
+            app:layout_constraintEnd_toEndOf="@id/cardFileIcon"
+            app:layout_constraintBottom_toBottomOf="@id/cardFileIcon"
+            android:layout_marginEnd="-4dp"
+            android:layout_marginBottom="-4dp"
+            tools:cardBackgroundColor="@color/status_completed" />
+
+        <!-- File information -->
+        <LinearLayout
+            android:id="@+id/layoutFileInfo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="12dp"
+            app:layout_constraintStart_toEndOf="@id/cardFileIcon"
+            app:layout_constraintEnd_toStartOf="@id/layoutActions"
+            app:layout_constraintTop_toTopOf="@id/cardFileIcon">
+
+            <TextView
+                android:id="@+id/textViewFileName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                android:textColor="?attr/colorOnSurface"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="2"
+                android:ellipsize="end"
+                tools:text="The Legend of Zelda - Ocarina of Time.z64" />
+
+            <TextView
+                android:id="@+id/textViewDownloadStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="?attr/colorPrimary"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="Baixando..." />
+
+        </LinearLayout>
+
+        <!-- Action buttons -->
+        <LinearLayout
+            android:id="@+id/layoutActions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@id/cardFileIcon">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonPauseDownload"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                app:icon="@android:drawable/ic_media_pause"
+                app:iconSize="18dp"
+                app:iconPadding="0dp"
+                app:cornerRadius="20dp"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_marginEnd="4dp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonResumeDownload"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                app:icon="@android:drawable/ic_media_play"
+                app:iconSize="18dp"
+                app:iconPadding="0dp"
+                app:cornerRadius="20dp"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_marginEnd="4dp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonCancelDownload"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:insetLeft="0dp"
+                android:insetRight="0dp"
+                app:icon="@android:drawable/ic_menu_close_clear_cancel"
+                app:iconSize="18dp"
+                app:iconPadding="0dp"
+                app:iconTint="?attr/colorError"
+                app:cornerRadius="20dp"
+                style="@style/Widget.Material3.Button.TextButton" />
+
+        </LinearLayout>
+
+        <!-- Progress section -->
+        <LinearLayout
+            android:id="@+id/layoutProgress"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="16dp"
+            app:layout_constraintStart_toStartOf="@id/layoutFileInfo"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/layoutFileInfo">
+
+            <!-- Progress info -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/textViewDownloadProgress"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="12.3 MB / 20.5 MB" />
+
+                <TextView
+                    android:id="@+id/textViewDownloadSpeed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="1.2 MB/s" />
+
+            </LinearLayout>
+
+            <!-- Progress bar -->
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/progressBarDownload"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:indicatorColor="?attr/colorPrimary"
+                app:trackColor="?attr/colorSurfaceVariant"
+                app:trackCornerRadius="2dp"
+                tools:progress="60" />
+
+        </LinearLayout>
+
+        <!-- Completed state (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/layoutCompleted"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="@id/layoutFileInfo"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/layoutFileInfo"
+            tools:visibility="visible">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@android:drawable/ic_menu_upload"
+                android:tint="@color/status_completed"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Download concluído"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="@color/status_completed"
+                android:fontFamily="sans-serif-medium" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonOpenFile"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Abrir"
+                android:textSize="12sp"
+                style="@style/Widget.Material3.Button.TonalButton"
+                app:cornerRadius="16dp" />
+
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>
+

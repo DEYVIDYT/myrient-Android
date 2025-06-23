@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">MyrientAndroid</string>
+    
+    <!-- Settings Activity -->
+    <string name="settings_title">Configurações</string>
+    <string name="settings_download_section">Download</string>
+    <string name="settings_download_folder">Pasta de Download</string>
+    <string name="settings_change_folder">Alterar Pasta</string>
+    <string name="settings_concurrent_downloads">Downloads Simultâneos</string>
+    <string name="settings_notifications">Notificações de Download</string>
+    <string name="settings_notifications_desc">Mostrar notificações durante o download</string>
+    <string name="settings_wifi_only">Apenas WiFi</string>
+    <string name="settings_wifi_only_desc">Baixar apenas quando conectado ao WiFi</string>
+    <string name="settings_about_section">Sobre</string>
+    <string name="settings_version">Versão</string>
+    <string name="settings_reset">Restaurar Padrões</string>
+    <string name="settings_save">Salvar</string>
+    
+    <!-- Settings Messages -->
+    <string name="settings_folder_selected">Pasta selecionada com sucesso</string>
+    <string name="settings_folder_invalid">Pasta inválida selecionada</string>
+    <string name="settings_folder_error">Erro ao processar pasta selecionada</string>
+    <string name="settings_folder_picker_error">Erro ao abrir seletor de pasta</string>
+    <string name="settings_reset_success">Configurações restauradas para os padrões</string>
+    <string name="settings_save_success">Configurações salvas com sucesso</string>
+</resources>
+
