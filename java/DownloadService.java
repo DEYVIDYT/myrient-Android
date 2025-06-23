@@ -502,12 +502,18 @@ public class DownloadService extends Service {
                 Response response = call.execute();
                 ResponseBody body = response.body();
 
+                if (isResuming) {
+                    Log.i(TAG, "Tentativa de retomada para " + downloadInfo.getFileName() +
+                               ". Cabeçalho Range enviado: bytes=" + downloadInfo.getBytesDownloaded() + "-. " +
+                               "Resposta do servidor: " + response.code() + " " + response.message());
+                }
+
                 if (body == null) {
                     throw new IOException("Corpo da resposta nulo para " + downloadInfo.getFileName());
                 }
 
                 long totalBytesReportedByServer = body.contentLength();
-                long initialBytesDownloaded = downloadInfo.getBytesDownloaded();
+                long initialBytesDownloaded = downloadInfo.getBytesDownloaded(); // Captura antes de qualquer possível reset
                 long totalBytesForProgress;
 
                 // --- Setup Output Stream (SAF or traditional) ---
