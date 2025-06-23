@@ -515,70 +515,98 @@ public class DownloadService extends Service {
                 long totalBytesReportedByServer = body.contentLength();
                 long initialBytesDownloaded = downloadInfo.getBytesDownloaded(); // Captura antes de qualquer possível reset
                 long totalBytesForProgress;
+                boolean serverRespondedWith206 = response.code() == 206;
 
                 // --- Setup Output Stream (SAF or traditional) ---
                 if (useSaf) {
-                    // Para retomada, precisamos abrir em modo de acréscimo ("wa" para write-append)
-                    // Para novo download ou se a retomada falhar e precisarmos sobrescrever, usamos modo de escrita ("w" para write)
-                    String openMode = (isResuming && response.code() == 206) ? "wa" : "w";
+                    String openMode = (isResuming && serverRespondedWith206) ? "wa" : "w";
+                    Log.d(TAG, "SAF: Abrindo OutputStream para '" + downloadInfo.getFileName() + "' com mode: " + openMode +
+                               ". isResuming: " + isResuming + ", serverRespondedWith206: " + serverRespondedWith206 +
+                               ". Current file length (DocFile): " + (targetFileDocFile != null ? targetFileDocFile.length() : "N/A"));
                     try {
                         outputStream = getContentResolver().openOutputStream(targetFileDocFile.getUri(), openMode);
                         if (outputStream == null) {
                             throw new IOException("Não foi possível abrir output stream para o arquivo SAF: " + targetFileDocFile.getUri());
                         }
-                        // Se estivermos retomando e o servidor suportar, movemos o ponteiro do arquivo para o final
-                        // No entanto, o modo "wa" já deve cuidar disso para SAF.
-                        // Se o servidor NÃO suportar a retomada (código 200), então 'isResuming' será setado para false abaixo,
-                        // e o arquivo será efetivamente sobrescrito por causa do modo "w" usado.
                     } catch (FileNotFoundException e) {
                         throw new IOException("Arquivo SAF não encontrado ao abrir output stream: " + targetFileDocFile.getUri(), e);
                     }
                 } else {
                     File actualTargetFile = new File(downloadInfo.getLocalFilePath());
-                    outputStream = new FileOutputStream(actualTargetFile, (isResuming && response.code() == 206)); // append if resuming and server supports
+                    boolean appendMode = isResuming && serverRespondedWith206;
+                    Log.d(TAG, "FileIO: Abrindo OutputStream para '" + downloadInfo.getFileName() + "' com appendMode: " + appendMode +
+                               ". isResuming: " + isResuming + ", serverRespondedWith206: " + serverRespondedWith206 +
+                               ". Current file length: " + actualTargetFile.length());
+                    outputStream = new FileOutputStream(actualTargetFile, appendMode);
                 }
 
 
                 if (isResuming) {
-                    if (response.code() == 206) { // HTTP_PARTIAL_CONTENT
-                        Log.i(TAG, "Servidor suportou retomada (206) para " + downloadInfo.getFileName());
+                    if (serverRespondedWith206) { // HTTP_PARTIAL_CONTENT
+                        Log.i(TAG, "Servidor suportou retomada (206) para " + downloadInfo.getFileName() +
+                                   ". initialBytesDownloaded: " + initialBytesDownloaded +
+                                   ", downloadInfo.getBytesDownloaded(): " + downloadInfo.getBytesDownloaded());
+
                         String contentRange = response.header("Content-Range");
                         if (contentRange != null) {
+                            Log.d(TAG, "Content-Range recebido: " + contentRange);
                             try {
-                                long serverTotal = Long.parseLong(contentRange.substring(contentRange.indexOf("/") + 1));
-                                downloadInfo.setTotalBytes(serverTotal);
-                            } catch (Exception e) { Log.e(TAG, "Erro ao parsear Content-Range: " + contentRange); }
+                                String[] parts = contentRange.split(" ");
+                                if (parts.length > 1) {
+                                    String[] rangeAndTotal = parts[1].split("/");
+                                    if (rangeAndTotal.length > 1) {
+                                        long serverTotal = Long.parseLong(rangeAndTotal[1]);
+                                        downloadInfo.setTotalBytes(serverTotal);
+                                        Log.d(TAG, "Total de bytes do servidor (Content-Range): " + serverTotal);
+                                    }
+                                }
+                            } catch (Exception e) { Log.e(TAG, "Erro ao parsear Content-Range: " + contentRange, e); }
                         }
-                        if(downloadInfo.getTotalBytes() <=0 && totalBytesReportedByServer > 0) {
+
+                        if (downloadInfo.getTotalBytes() <= 0 && totalBytesReportedByServer > 0) {
                             downloadInfo.setTotalBytes(initialBytesDownloaded + totalBytesReportedByServer);
+                            Log.d(TAG, "Total de bytes calculado (initial + reported): " + downloadInfo.getTotalBytes());
                         }
                         totalBytesForProgress = downloadInfo.getTotalBytes();
-                        // outputStream já configurado para append se SAF ou File I/O
+
+                        Log.i(TAG, "RETOMADA 206: Pronto para iniciar loop. initialBytesDownloaded=" + initialBytesDownloaded +
+                                   ", downloadInfo.getBytesDownloaded()=" + downloadInfo.getBytesDownloaded() +
+                                   ", totalBytesForProgress=" + totalBytesForProgress);
+
                     } else { // Server did not support range, or returned 200 OK
                         Log.w(TAG, "Servidor não suportou retomada (código " + response.code() + ") para " + downloadInfo.getFileName() + ". Reiniciando download.");
-                        isResuming = false; // Tratar como novo download
                         initialBytesDownloaded = 0;
                         downloadInfo.setBytesDownloaded(0);
-                        downloadInfo.setTotalBytes(totalBytesReportedByServer > 0 ? totalBytesReportedByServer : -1);
-                        totalBytesForProgress = downloadInfo.getTotalBytes();
-                        // Reabrir outputStream em modo de sobrescrita se já estava aberto em append
-                        if (outputStream != null) try { outputStream.close(); } catch (IOException e) { /* ignore */ }
-                        if (useSaf) {
-                            outputStream = getContentResolver().openOutputStream(targetFileDocFile.getUri(), "w");
-                             if (outputStream == null) throw new IOException("Não foi possível reabrir output stream SAF para sobrescrita.");
+
+                        // O outputStream já foi aberto em modo de sobrescrita porque serverRespondedWith206 é false.
+                        // Não é necessário fechar e reabrir aqui, a menos que a lógica de abertura inicial mude.
+                        // A lógica original de reabertura foi removida para simplificar, pois a decisão já foi tomada.
+
+                        if (totalBytesReportedByServer > 0) {
+                            downloadInfo.setTotalBytes(totalBytesReportedByServer);
                         } else {
-                            outputStream = new FileOutputStream(new File(downloadInfo.getLocalFilePath()), false); // Overwrite
+                            downloadInfo.setTotalBytes(-1);
                         }
+                        totalBytesForProgress = downloadInfo.getTotalBytes();
+                        Log.i(TAG, "NÃO-RETOMADA: Pronto para iniciar loop. initialBytesDownloaded=" + initialBytesDownloaded +
+                            ", downloadInfo.getBytesDownloaded()=" + downloadInfo.getBytesDownloaded() +
+                            ", totalBytesForProgress=" + totalBytesForProgress);
                     }
                 } else { // Novo download
-                    if (!response.isSuccessful()) {
+                    if (!response.isSuccessful()) { // Só checar para novo download; retomada falha tratada acima
                         throw new IOException("Falha no download (novo): " + response.code() + " - " + response.message());
                     }
                     initialBytesDownloaded = 0;
                     downloadInfo.setBytesDownloaded(0);
-                    downloadInfo.setTotalBytes(totalBytesReportedByServer > 0 ? totalBytesReportedByServer : -1);
+                    if (totalBytesReportedByServer > 0) {
+                        downloadInfo.setTotalBytes(totalBytesReportedByServer);
+                    } else {
+                        downloadInfo.setTotalBytes(-1);
+                    }
                     totalBytesForProgress = downloadInfo.getTotalBytes();
-                    // outputStream já configurado para sobrescrita se SAF ou File I/O
+                    Log.i(TAG, "NOVO DOWNLOAD: Pronto para iniciar loop. initialBytesDownloaded=" + initialBytesDownloaded +
+                        ", downloadInfo.getBytesDownloaded()=" + downloadInfo.getBytesDownloaded() +
+                        ", totalBytesForProgress=" + totalBytesForProgress);
                 }
 
                 // Atualiza DB com o tamanho total se foi descoberto/confirmado
