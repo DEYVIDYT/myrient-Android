@@ -9,7 +9,6 @@ import android.content.Context; // Adicionado
 import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
-import java.util.List; // Adicionado
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
@@ -17,13 +16,16 @@ import android.os.Message;
 import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.documentfile.provider.DocumentFile;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -448,33 +450,41 @@ public class DownloadService extends Service {
 
             try {
                 // --- Destination File Setup using configured download path ---
-                String downloadPath = SettingsActivity.getDownloadPath(DownloadService.this);
-                File targetDir;
-                
-                // Check if the path is a content URI (from SAF) or a regular file path
-                if (downloadPath.startsWith("content://")) {
-                    // For now, fall back to internal storage if SAF URI is used
-                    // TODO: Implement proper SAF handling for content URIs
-                    targetDir = new File(getFilesDir(), "MyrientDownloads");
-                    Log.w(TAG, "SAF URI detected, using internal storage: " + targetDir.getAbsolutePath());
-                } else {
-                    // Use the configured path
-                    targetDir = new File(downloadPath);
-                }
-                
-                if (!targetDir.exists()) {
-                    if (!targetDir.mkdirs()) {
-                        Log.w(TAG, "Não foi possível criar o diretório de downloads: " + targetDir.getAbsolutePath());
-                        // Fall back to internal storage
-                        targetDir = new File(getFilesDir(), "MyrientDownloads");
-                        if (!targetDir.exists() && !targetDir.mkdirs()) {
-                            throw new IOException("Não foi possível criar diretório de download");
-                        }
-                    }
-                }
-                File targetFile = new File(targetDir, downloadInfo.getFileName());
+                String downloadPathSetting = SettingsActivity.getDownloadPath(DownloadService.this);
+                Uri downloadUri = null; // Inicializar como nulo
+                DocumentFile targetDirDocFile = null;
+                DocumentFile targetFileDocFile = null;
+                boolean useSaf = downloadPathSetting.startsWith("content://");
 
-                downloadInfo.setLocalFilePath(targetFile.getAbsolutePath());
+                if (useSaf) {
+                    downloadUri = Uri.parse(downloadPathSetting); // Parsear somente se for SAF
+                    targetDirDocFile = DocumentFile.fromTreeUri(DownloadService.this, downloadUri);
+                    if (targetDirDocFile == null || !targetDirDocFile.exists() || !targetDirDocFile.isDirectory()) {
+                        throw new IOException("Diretório de download SAF inválido ou não acessível: " + downloadPathSetting);
+                    }
+                    // Verificar se o arquivo já existe para possível retomada ou substituição
+                    targetFileDocFile = targetDirDocFile.findFile(downloadInfo.getFileName());
+                    if (targetFileDocFile != null && targetFileDocFile.exists()) {
+                        // Se o arquivo existe e não estamos retomando, ou se a retomada falhar, ele será sobrescrito.
+                        // Se estivermos retomando, o modo de abertura do outputStream cuidará disso.
+                        Log.d(TAG, "Arquivo existente encontrado em SAF: " + downloadInfo.getFileName());
+                    } else {
+                        // Cria o arquivo se não existir
+                        targetFileDocFile = targetDirDocFile.createFile("*/*", downloadInfo.getFileName());
+                    }
+                    if (targetFileDocFile == null || !targetFileDocFile.exists()) {
+                        throw new IOException("Não foi possível criar o arquivo de destino em SAF: " + downloadInfo.getFileName());
+                    }
+                    downloadInfo.setLocalFilePath(targetFileDocFile.getUri().toString()); // Salva o URI do arquivo
+                } else {
+                    File targetDir = new File(downloadPathSetting);
+                    if (!targetDir.exists() && !targetDir.mkdirs()) {
+                        throw new IOException("Não foi possível criar o diretório de downloads: " + targetDir.getAbsolutePath());
+                    }
+                    File targetFile = new File(targetDir, downloadInfo.getFileName());
+                    downloadInfo.setLocalFilePath(targetFile.getAbsolutePath());
+                }
+
 
                 // --- OkHttp Request Setup ---
                 Request.Builder requestBuilder = new Request.Builder().url(downloadInfo.getOriginalUrl());
@@ -491,13 +501,36 @@ public class DownloadService extends Service {
                 Response response = call.execute();
                 ResponseBody body = response.body();
 
-                if (body == null) { // Checagem de corpo nulo
+                if (body == null) {
                     throw new IOException("Corpo da resposta nulo para " + downloadInfo.getFileName());
                 }
 
-                long totalBytesReportedByServer = body.contentLength(); // Tamanho do conteúdo restante (se Range) ou total.
-                long initialBytesDownloaded = downloadInfo.getBytesDownloaded(); // Bytes que já tínhamos.
+                long totalBytesReportedByServer = body.contentLength();
+                long initialBytesDownloaded = downloadInfo.getBytesDownloaded();
                 long totalBytesForProgress;
+
+                // --- Setup Output Stream (SAF or traditional) ---
+                if (useSaf) {
+                    // Para retomada, precisamos abrir em modo de acréscimo ("wa" para write-append)
+                    // Para novo download ou se a retomada falhar e precisarmos sobrescrever, usamos modo de escrita ("w" para write)
+                    String openMode = (isResuming && response.code() == 206) ? "wa" : "w";
+                    try {
+                        outputStream = getContentResolver().openOutputStream(targetFileDocFile.getUri(), openMode);
+                        if (outputStream == null) {
+                            throw new IOException("Não foi possível abrir output stream para o arquivo SAF: " + targetFileDocFile.getUri());
+                        }
+                        // Se estivermos retomando e o servidor suportar, movemos o ponteiro do arquivo para o final
+                        // No entanto, o modo "wa" já deve cuidar disso para SAF.
+                        // Se o servidor NÃO suportar a retomada (código 200), então 'isResuming' será setado para false abaixo,
+                        // e o arquivo será efetivamente sobrescrito por causa do modo "w" usado.
+                    } catch (FileNotFoundException e) {
+                        throw new IOException("Arquivo SAF não encontrado ao abrir output stream: " + targetFileDocFile.getUri(), e);
+                    }
+                } else {
+                    File actualTargetFile = new File(downloadInfo.getLocalFilePath());
+                    outputStream = new FileOutputStream(actualTargetFile, (isResuming && response.code() == 206)); // append if resuming and server supports
+                }
+
 
                 if (isResuming) {
                     if (response.code() == 206) { // HTTP_PARTIAL_CONTENT
@@ -512,16 +545,23 @@ public class DownloadService extends Service {
                         if(downloadInfo.getTotalBytes() <=0 && totalBytesReportedByServer > 0) {
                             downloadInfo.setTotalBytes(initialBytesDownloaded + totalBytesReportedByServer);
                         }
-                         totalBytesForProgress = downloadInfo.getTotalBytes();
-                         outputStream = new FileOutputStream(targetFile, true); // Append
+                        totalBytesForProgress = downloadInfo.getTotalBytes();
+                        // outputStream já configurado para append se SAF ou File I/O
                     } else { // Server did not support range, or returned 200 OK
                         Log.w(TAG, "Servidor não suportou retomada (código " + response.code() + ") para " + downloadInfo.getFileName() + ". Reiniciando download.");
                         isResuming = false; // Tratar como novo download
                         initialBytesDownloaded = 0;
                         downloadInfo.setBytesDownloaded(0);
-                        downloadInfo.setTotalBytes(totalBytesReportedByServer > 0 ? totalBytesReportedByServer : -1); // Atualiza o total se conhecido
+                        downloadInfo.setTotalBytes(totalBytesReportedByServer > 0 ? totalBytesReportedByServer : -1);
                         totalBytesForProgress = downloadInfo.getTotalBytes();
-                        outputStream = new FileOutputStream(targetFile, false); // Overwrite
+                        // Reabrir outputStream em modo de sobrescrita se já estava aberto em append
+                        if (outputStream != null) try { outputStream.close(); } catch (IOException e) { /* ignore */ }
+                        if (useSaf) {
+                            outputStream = getContentResolver().openOutputStream(targetFileDocFile.getUri(), "w");
+                             if (outputStream == null) throw new IOException("Não foi possível reabrir output stream SAF para sobrescrita.");
+                        } else {
+                            outputStream = new FileOutputStream(new File(downloadInfo.getLocalFilePath()), false); // Overwrite
+                        }
                     }
                 } else { // Novo download
                     if (!response.isSuccessful()) {
@@ -531,7 +571,7 @@ public class DownloadService extends Service {
                     downloadInfo.setBytesDownloaded(0);
                     downloadInfo.setTotalBytes(totalBytesReportedByServer > 0 ? totalBytesReportedByServer : -1);
                     totalBytesForProgress = downloadInfo.getTotalBytes();
-                    outputStream = new FileOutputStream(targetFile, false); // Overwrite
+                    // outputStream já configurado para sobrescrita se SAF ou File I/O
                 }
 
                 // Atualiza DB com o tamanho total se foi descoberto/confirmado
